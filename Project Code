@@ -1,0 +1,98 @@
+#include <usbhid.h>
+#include <hiduniversal.h>
+#include <Usb.h>
+#include <usbhub.h>
+#include <hidboot.h>
+#include <Adafruit_MLX90614.h>
+#include<LiquidCrystal.h>
+int rs=6,en=7,d4=5,d5=4,d6=3,d7=2;
+LiquidCrystal LCD (rs,en,d4,d5,d6,d7);
+Adafruit_MLX90614 mlx = Adafruit_MLX90614();
+double temp;
+int a=0;
+USB Usb;
+USBHub Hub(&Usb);
+HIDUniversal Hid(&Usb);
+
+String data = "";
+
+class KbdRptParser: public KeyboardReportParser {
+    void PrintKey (uint8_t mod, uint8_t key);
+  protected:
+    virtual void OnKeyDown (uint8_t mod, uint8_t key);
+    virtual void OnKeyPressed (uint8_t key);
+};
+
+KbdRptParser Prs;
+
+void setup () {
+  mlx.begin ();
+  LCD.begin(16,2);
+  Serial.begin(9600);
+  Serial.println ("CLEARDATA");
+  Serial.println("LABEL, Time, Date, TEMPERATURE, STATUS, STUDENT ID");
+  Serial.println("RESETTIMER");
+  Usb.Init ();
+  delay (200);
+  Hid.SetReportParser(0, (HIDReportParser*) &Prs);
+}
+void loop () {
+  Usb.Task ();
+  temp = mlx.readAmbientTempF ();
+  LCD.setCursor(0,0);
+  LCD.print("TEMP = ");
+  LCD.setCursor(7,0);
+  LCD.print(temp);
+  LCD.setCursor(13,0);
+  LCD.print("F");
+  if (temp>98.6){
+  digitalWrite (8, LOW);  
+  LCD.setCursor(0,1);
+  digitalWrite(A3,HIGH); 
+  LCD.print("  HIGH");
+  digitalWrite (A2, HIGH);
+  
+  }
+  else{
+  digitalWrite (A2, LOW);
+  LCD.setCursor(0,1);
+  digitalWrite (A3, LOW); 
+  LCD.print ("NORMAL");
+  digitalWrite (8, HIGH);
+  
+  }
+}
+
+
+void KbdRptParser:: OnKeyDown(uint8_t mod, uint8_t key) {
+  uint8_t c = OemToAscii(mod, key);
+
+  if (c)
+    OnKeyPressed(c);
+}
+
+void KbdRptParser::OnKeyPressed(uint8_t key) {
+  char c = (char)key;
+
+  if (key == 19) {
+    String ret = data;
+    data = "";
+    barcodeCallback(ret);
+  } else {
+    data += c;
+  }
+}
+
+void barcodeCallback (String data) {
+  Serial.print("DATA, TIME, DATE,");
+  Serial.print(temp);
+  Serial.print(",");
+  if (temp>98.6) {
+    Serial.print("HIGH,");
+  }
+  else {
+    Serial.print("NORMAL,");
+  }
+  Serial.print(data);
+  Serial.println(",");
+}
